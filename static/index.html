@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FocusSense — Attention Detection</title>
+  <style>
+    /* ── Reset & base ────────────────────────────────────────────── */
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background:#0a0a0f;
+      color:#e2e8f0;
+      font-family:'Segoe UI',system-ui,sans-serif;
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding:2rem 1rem 3rem;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────── */
+    .header { text-align:center; margin-bottom:2rem; }
+
+    h1 {
+      font-size:2.2rem;
+      font-weight:700;
+      background:linear-gradient(135deg,#6366f1,#8b5cf6);
+      -webkit-background-clip:text;
+      background-clip:text;
+      -webkit-text-fill-color:transparent;
+      color:transparent;
+      margin-bottom:0.3rem;
+    }
+
+    .subtitle { color:#475569; font-size:0.88rem; letter-spacing:0.03em; }
+
+    /* ── Main grid ───────────────────────────────────────────────── */
+    .main-grid {
+      display:grid;
+      grid-template-columns:1fr 300px;
+      gap:1.25rem;
+      width:100%;
+      max-width:1080px;
+    }
+
+    /* ── Video panel ─────────────────────────────────────────────── */
+    .video-panel {
+      background:#0d0d14;
+      border:1px solid #1a1a2e;
+      border-radius:16px;
+      overflow:hidden;
+      position:relative;
+      min-height:360px;
+      transition:box-shadow 0.3s;
+    }
+
+    .video-panel.distract-border {
+      box-shadow:0 0 0 3px rgba(239,68,68,0.6);
+    }
+
+    #output-canvas { width:100%; display:block; border-radius:16px; }
+    #webcam        { display:none; }
+    #cap-canvas    { display:none; }
+
+    .video-overlay { position:absolute; top:14px; left:14px; }
+
+    .status-badge {
+      padding:5px 14px;
+      border-radius:99px;
+      font-size:13px;
+      font-weight:600;
+      letter-spacing:0.04em;
+      transition:all 0.3s;
+    }
+
+    .badge-focused    { background:rgba(34,197,94,.15);  color:#22c55e; border:1px solid rgba(34,197,94,.35); }
+    .badge-distracted { background:rgba(239,68,68,.15);  color:#ef4444; border:1px solid rgba(239,68,68,.35); }
+    .badge-waiting    { background:rgba(100,116,139,.15); color:#64748b; border:1px solid rgba(100,116,139,.3); }
+
+    .fps-badge {
+      position:absolute; bottom:12px; right:14px;
+      font-size:11px; color:#334155;
+      background:rgba(0,0,0,0.55);
+      padding:3px 9px; border-radius:99px;
+    }
+
+    .cam-placeholder {
+      position:absolute; inset:0;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:0.5rem; color:#1e293b;
+    }
+
+    .cam-placeholder svg { width:48px; height:48px; }
+    .cam-placeholder p   { font-size:13px; }
+
+    /* ── Right panel ─────────────────────────────────────────────── */
+    .right-panel { display:flex; flex-direction:column; gap:1rem; }
+
+    .card {
+      background:#0d0d14;
+      border:1px solid #1a1a2e;
+      border-radius:14px;
+      padding:1rem 1.1rem;
+    }
+
+    .card-title {
+      font-size:10px; font-weight:600; color:#334155;
+      text-transform:uppercase; letter-spacing:0.09em;
+      margin-bottom:0.85rem;
+    }
+
+    /* controls */
+    .btn-row { display:flex; gap:0.6rem; }
+
+    .btn {
+      flex:1; padding:9px 0; border:none;
+      border-radius:10px; font-size:13px;
+      font-weight:500; cursor:pointer; transition:all 0.18s;
+    }
+
+    .btn-start {
+      background:linear-gradient(135deg,#6366f1,#8b5cf6);
+      color:#fff;
+    }
+
+    .btn-start:hover    { opacity:0.88; transform:translateY(-1px); }
+    .btn-start:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+    .btn-stop  { background:#161622; color:#64748b; border:1px solid #1e1e30; }
+    .btn-stop:hover { background:#1e1e30; color:#94a3b8; }
+
+    /* connection */
+    .conn-row {
+      display:flex; align-items:center; gap:7px;
+      margin-top:0.7rem; font-size:12px; color:#334155;
+    }
+
+    .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .dot-on   { background:#22c55e; }
+    .dot-off  { background:#ef4444; }
+    .dot-wait { background:#f59e0b; animation:blink 1s infinite; }
+
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+    /* focus timer */
+    .timer-card {
+      background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08));
+      border:1px solid rgba(99,102,241,.18);
+      border-radius:14px; padding:1rem 1.1rem; text-align:center;
+    }
+
+    .timer-label {
+      font-size:10px; font-weight:600; color:#6366f1;
+      text-transform:uppercase; letter-spacing:0.09em; margin-bottom:0.3rem;
+    }
+
+    .timer-value {
+      font-size:2.6rem; font-weight:700; color:#818cf8;
+      font-variant-numeric:tabular-nums; letter-spacing:-0.02em;
+    }
+
+    /* model stats */
+    .stat-row {
+      display:flex; align-items:center;
+      justify-content:space-between; margin-bottom:0.55rem;
+    }
+
+    .stat-row:last-child { margin-bottom:0; }
+    .stat-name { font-size:12px; color:#475569; }
+    .stat-val  { font-size:12px; font-weight:500; color:#cbd5e1; }
+
+    .bar-wrap { width:64px; height:5px; background:#1a1a2e; border-radius:99px; overflow:hidden; }
+    .bar-fill {
+      height:100%; border-radius:99px;
+      background:linear-gradient(90deg,#6366f1,#8b5cf6);
+      transition:width 0.3s; width:0%;
+    }
+
+    /* environment */
+    .env-row {
+      display:flex; justify-content:space-between;
+      font-size:12px; margin-bottom:0.45rem; color:#475569;
+    }
+
+    .env-row:last-child { margin-bottom:0; }
+    .env-row span:last-child { color:#cbd5e1; font-weight:500; }
+
+    /* ── Warning countdown bar ───────────────────────────────────── */
+    .warn-card {
+      background:#0d0d14;
+      border:1px solid #1a1a2e;
+      border-radius:14px;
+      padding:1rem 1.1rem;
+      transition:border-color 0.3s;
+    }
+
+    .warn-card.active { border-color:rgba(239,68,68,0.4); }
+
+    .warn-header {
+      display:flex; justify-content:space-between;
+      align-items:center; margin-bottom:0.6rem;
+    }
+
+    .warn-title {
+      font-size:10px; font-weight:600; color:#334155;
+      text-transform:uppercase; letter-spacing:0.09em;
+    }
+
+    .warn-count {
+      font-size:11px; font-weight:600;
+      color:#ef4444; background:rgba(239,68,68,0.1);
+      padding:2px 8px; border-radius:99px;
+      border:1px solid rgba(239,68,68,0.2);
+    }
+
+    .warn-progress-wrap {
+      height:6px; background:#1a1a2e;
+      border-radius:99px; overflow:hidden; margin-bottom:0.5rem;
+    }
+
+    .warn-progress-bar {
+      height:100%; width:0%;
+      border-radius:99px;
+      background:linear-gradient(90deg,#f59e0b,#ef4444);
+      transition:width 0.9s linear;
+    }
+
+    .warn-status {
+      font-size:11px; color:#475569;
+    }
+
+    /* ── Full screen red flash overlay ──────────────────────────── */
+    #red-flash {
+      position:fixed; inset:0; z-index:9999;
+      background:rgba(239,68,68,0.18);
+      border:4px solid #ef4444;
+      display:none;
+      pointer-events:none;
+      animation:flash-pulse 0.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes flash-pulse {
+      from { background:rgba(239,68,68,0.1); }
+      to   { background:rgba(239,68,68,0.3); }
+    }
+
+    /* ── Warning popup card (slide in from top-right) ────────────── */
+    #warn-popup {
+      position:fixed; top:20px; right:20px; z-index:10000;
+      background:#0d0d14;
+      border:1.5px solid #ef4444;
+      border-radius:14px;
+      padding:1rem 1.25rem;
+      min-width:260px;
+      box-shadow:0 8px 32px rgba(239,68,68,0.25);
+      transform:translateX(320px);
+      transition:transform 0.35s cubic-bezier(.22,.68,0,1.2);
+      pointer-events:none;
+    }
+
+    #warn-popup.show { transform:translateX(0); }
+
+    .popup-header {
+      display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;
+    }
+
+    .popup-icon { font-size:20px; }
+
+    .popup-title {
+      font-size:13px; font-weight:700;
+      color:#ef4444; letter-spacing:0.03em;
+    }
+
+    .popup-sub  { font-size:11px; color:#64748b; margin-bottom:0.4rem; }
+    .popup-msg  { font-size:12px; color:#94a3b8; line-height:1.5; }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width:700px) {
+      .main-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Full screen red flash -->
+<div id="red-flash"></div>
+
+<!-- Warning popup -->
+<div id="warn-popup">
+  <div class="popup-header">
+    <span class="popup-icon">⚠️</span>
+    <span class="popup-title">DISTRACTION WARNING</span>
+  </div>
+  <div class="popup-sub" id="popup-sub">Warning #1 · 15s continuous distraction</div>
+  <div class="popup-msg">Close distracting apps and refocus.</div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <h1>FocusSense</h1>
+  <p class="subtitle">Real-time attention detection · gaze &nbsp;·&nbsp; pose &nbsp;·&nbsp; emotion</p>
+</div>
+
+<!-- Main layout -->
+<div class="main-grid">
+
+  <!-- Video panel -->
+  <div class="video-panel" id="video-panel">
+    <div class="cam-placeholder" id="placeholder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M23 7l-7 5 7 5V7z"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+      <p>Click Start to begin</p>
+    </div>
+    <video  id="webcam"        autoplay playsinline></video>
+    <canvas id="output-canvas"></canvas>
+    <canvas id="cap-canvas"   ></canvas>
+    <div class="video-overlay">
+      <span class="status-badge badge-waiting" id="status-badge">● Waiting</span>
+    </div>
+    <div class="fps-badge" id="fps-badge">— fps</div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="right-panel">
+
+    <!-- Controls -->
+    <div class="card">
+      <div class="card-title">Controls</div>
+      <div class="btn-row">
+        <button class="btn btn-start" id="start-btn" onclick="startSession()">▶ Start</button>
+        <button class="btn btn-stop"  id="stop-btn"  onclick="stopSession()">■ Stop</button>
+      </div>
+      <div class="conn-row">
+        <span class="dot dot-off" id="conn-dot"></span>
+        <span id="conn-text">Not connected</span>
+      </div>
+    </div>
+
+    <!-- Focus timer -->
+    <div class="timer-card">
+      <div class="timer-label">Focus Time</div>
+      <div class="timer-value" id="focus-timer">00:00</div>
+    </div>
+
+    <!-- Warning countdown -->
+    <div class="warn-card" id="warn-card">
+      <div class="warn-header">
+        <span class="warn-title">⚠ Warning Timer (fires @15s)</span>
+        <span class="warn-count" id="warn-count">0 warnings</span>
+      </div>
+      <div class="warn-progress-wrap">
+        <div class="warn-progress-bar" id="warn-bar"></div>
+      </div>
+      <div class="warn-status" id="warn-status">FOCUSED — timer paused</div>
+    </div>
+
+    <!-- Model signals -->
+    <div class="card">
+      <div class="card-title">Model Signals</div>
+      <div class="stat-row">
+        <span class="stat-name">Gaze</span>
+        <span class="stat-val" id="gaze-label">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-name">Confidence</span>
+        <div class="bar-wrap"><div class="bar-fill" id="gaze-bar"></div></div>
+      </div>
+      <div class="stat-row" style="margin-top:.6rem">
+        <span class="stat-name">Pose</span>
+        <span class="stat-val" id="pose-label">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-name">Confidence</span>
+        <div class="bar-wrap"><div class="bar-fill" id="pose-bar"></div></div>
+      </div>
+      <div class="stat-row" style="margin-top:.6rem">
+        <span class="stat-name">Emotion</span>
+        <span class="stat-val" id="df-label">—</span>
+      </div>
+    </div>
+
+    <!-- Environment -->
+    <div class="card">
+      <div class="card-title">Environment</div>
+      <div class="env-row"><span>Distance</span><span id="dist-val">— cm</span></div>
+      <div class="env-row"><span>Yaw</span>    <span id="yaw-val">—°</span></div>
+      <div class="env-row"><span>Pitch</span>  <span id="pitch-val">—°</span></div>
+      <div class="env-row"><span>Frames</span> <span id="frame-val">0</span></div>
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+  // ── Constants ──────────────────────────────────────────────────────────────
+  const WARNING_INTERVAL_S = 15;   // matches main.py WARNING_INTERVAL_S
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let ws           = null;
+  let stream       = null;
+  let running      = false;
+  let focusSecs    = 0;
+  let distractSecs = 0;
+  let warnCount    = 0;
+  let waitingReply = false;
+  let fpsCount     = 0;
+
+  let timerHandle  = null;
+  let fpsHandle    = null;
+  let flashHandle  = null;
+
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  const webcam      = document.getElementById("webcam");
+  const outCanvas   = document.getElementById("output-canvas");
+  const capCanvas   = document.getElementById("cap-canvas");
+  const outCtx      = outCanvas.getContext("2d");
+  const capCtx      = capCanvas.getContext("2d");
+  const placeholder = document.getElementById("placeholder");
+  const redFlash    = document.getElementById("red-flash");
+  const warnPopup   = document.getElementById("warn-popup");
+
+  // Request browser notification permission on load
+  if ("Notification" in window) Notification.requestPermission();
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+    setConn("wait", "Connecting…");
+
+    ws.onopen = () => {
+      setConn("on", "Connected");
+      sendFrame();
+    };
+
+    ws.onclose = () => {
+      setConn("off", "Disconnected");
+      waitingReply = false;
+      if (running) setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => {
+      setConn("off", "Connection error");
+      waitingReply = false;
+    };
+
+    ws.onmessage = (evt) => {
+      waitingReply = false;
+      updateUI(JSON.parse(evt.data));
+      fpsCount++;
+      if (running) requestAnimationFrame(sendFrame);
+    };
+  }
+
+  // ── Send frame ─────────────────────────────────────────────────────────────
+  function sendFrame() {
+    if (!running || waitingReply)    return;
+    if (!ws || ws.readyState !== 1)  return;
+    if (!webcam.videoWidth)          return;
+
+    capCanvas.width  = webcam.videoWidth;
+    capCanvas.height = webcam.videoHeight;
+    capCtx.drawImage(webcam, 0, 0);
+
+    ws.send(capCanvas.toDataURL("image/jpeg", 0.8));
+    waitingReply = true;
+  }
+
+  // ── Update UI ──────────────────────────────────────────────────────────────
+  function updateUI(d) {
+    // Draw annotated frame
+    const img  = new Image();
+    img.onload = () => {
+      outCanvas.width  = img.width;
+      outCanvas.height = img.height;
+      outCtx.drawImage(img, 0, 0);
+    };
+    img.src = d.frame;
+
+    // Status badge
+    const badge = document.getElementById("status-badge");
+    const panel = document.getElementById("video-panel");
+    if (d.focused) {
+      badge.className   = "status-badge badge-focused";
+      badge.textContent = "● Focused";
+      panel.classList.remove("distract-border");
+    } else {
+      badge.className   = "status-badge badge-distracted";
+      badge.textContent = "● Distracted";
+      panel.classList.add("distract-border");
+    }
+
+    // Model signals
+    setText("gaze-label", d.gaze_label);
+    setText("pose-label", d.pose_label);
+    setText("df-label",   d.df_label);
+    setBar ("gaze-bar",   d.gaze_conf);
+    setBar ("pose-bar",   d.pose_conf);
+
+    // Environment
+    setText("dist-val",  d.dist  + " cm");
+    setText("yaw-val",   d.yaw   + "°");
+    setText("pitch-val", d.pitch + "°");
+    setText("frame-val", d.frame_n);
+  }
+
+  // ── Distraction warning engine (JS equivalent of DistractionWarningEngine) ─
+  function tickWarningEngine(focused) {
+    const bar    = document.getElementById("warn-bar");
+    const status = document.getElementById("warn-status");
+    const card   = document.getElementById("warn-card");
+
+    if (focused) {
+      // Reset instantly on focus return — same as Front_1.py
+      distractSecs = 0;
+      bar.style.width = "0%";
+      status.textContent = "FOCUSED — timer paused";
+      card.classList.remove("active");
+    } else {
+      distractSecs++;
+      const pct = ((distractSecs % WARNING_INTERVAL_S) / WARNING_INTERVAL_S) * 100;
+      bar.style.width = pct + "%";
+      status.textContent = `Distracted ${distractSecs}s — warning in ${WARNING_INTERVAL_S - (distractSecs % WARNING_INTERVAL_S)}s`;
+      card.classList.add("active");
+
+      // Fire warning every WARNING_INTERVAL_S seconds
+      if (distractSecs > 0 && distractSecs % WARNING_INTERVAL_S === 0) {
+        fireWarning(distractSecs);
+      }
+    }
+  }
+
+  // ── Fire warning (equivalent of FullScreenRedFlash + WarningPopup) ─────────
+  function fireWarning(secs) {
+    warnCount++;
+    setText("warn-count", warnCount + (warnCount === 1 ? " warning" : " warnings"));
+
+    // 1. Full screen red flash
+    redFlash.style.display = "block";
+    clearTimeout(flashHandle);
+    flashHandle = setTimeout(() => {
+      redFlash.style.display = "none";
+    }, 2000);
+
+    // 2. Slide-in popup card
+    document.getElementById("popup-sub").textContent =
+      `Warning #${warnCount}  ·  ${secs}s continuous distraction`;
+    warnPopup.classList.add("show");
+    setTimeout(() => warnPopup.classList.remove("show"), 4000);
+
+    // 3. Browser notification (OS-level)
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("FocusSense — Distraction Warning ⚠️", {
+        body: `You've been distracted for ${secs} seconds. Refocus now!`,
+        icon: ""
+      });
+    }
+  }
+
+  // ── 1-second tick — drives focus timer + warning engine ───────────────────
+  function tick() {
+    const badge   = document.getElementById("status-badge");
+    const focused = badge.classList.contains("badge-focused");
+
+    // Focus timer
+    if (focused) {
+      focusSecs++;
+      const m = String(Math.floor(focusSecs/60)).padStart(2,"0");
+      const s = String(focusSecs % 60).padStart(2,"0");
+      setText("focus-timer", `${m}:${s}`);
+    }
+
+    // Warning engine
+    tickWarningEngine(focused);
+  }
+
+  // ── Start session ──────────────────────────────────────────────────────────
+  async function startSession() {
+    document.getElementById("start-btn").disabled = true;
+    placeholder.style.display = "none";
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{ width:640, height:480, facingMode:"user" }, audio:false
+      });
+      webcam.srcObject = stream;
+      await new Promise(r => webcam.onloadedmetadata = r);
+    } catch (err) {
+      alert("Camera access denied. Please allow camera permissions and refresh.");
+      document.getElementById("start-btn").disabled = false;
+      placeholder.style.display = "flex";
+      return;
+    }
+
+    running     = true;
+    focusSecs   = 0;
+    distractSecs = 0;
+    warnCount   = 0;
+
+    connect();
+
+    timerHandle = setInterval(tick, 1000);
+    fpsHandle   = setInterval(() => {
+      setText("fps-badge", fpsCount + " fps");
+      fpsCount = 0;
+    }, 1000);
+  }
+
+  // ── Stop session ───────────────────────────────────────────────────────────
+  function stopSession() {
+    running      = false;
+    waitingReply = false;
+
+    if (ws)     { ws.close(); ws = null; }
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+
+    clearInterval(timerHandle);
+    clearInterval(fpsHandle);
+    clearTimeout(flashHandle);
+
+    redFlash.style.display = "none";
+    warnPopup.classList.remove("show");
+
+    document.getElementById("start-btn").disabled = false;
+    document.getElementById("status-badge").className   = "status-badge badge-waiting";
+    document.getElementById("status-badge").textContent = "● Waiting";
+    document.getElementById("fps-badge").textContent    = "— fps";
+    document.getElementById("warn-bar").style.width     = "0%";
+    document.getElementById("warn-status").textContent  = "FOCUSED — timer paused";
+    document.getElementById("warn-card").classList.remove("active");
+    placeholder.style.display = "flex";
+
+    setConn("off", "Not connected");
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function setText(id, val) { document.getElementById(id).textContent = val; }
+  function setBar (id, conf){ document.getElementById(id).style.width = (conf*100)+"%"; }
+
+  function setConn(state, text) {
+    const dot = document.getElementById("conn-dot");
+    dot.className = state==="on" ? "dot dot-on" : state==="wait" ? "dot dot-wait" : "dot dot-off";
+    setText("conn-text", text);
+  }
+</script>
+
+</body>
+</html>
