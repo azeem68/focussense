@@ -11,6 +11,8 @@ from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import classification_report, confusion_matrix
+from imblearn.over_sampling import RandomOverSampler
 
 # ─── 1. DOWNLOAD DATASETS ────────────────────────────────────────────────────
 path_gaze = kagglehub.dataset_download("uwrfkaggler/ravdess-facial-landmark-tracking")
@@ -116,8 +118,6 @@ df_pose['target'] = (
 X2 = df_pose[['yaw', 'pitch', 'roll', 'magnitude']].values
 y2 = df_pose['target'].values
 
-print(f"\nGaze — class balance: {np.bincount(y1)}")
-print(f"Pose  — class balance: {np.bincount(y2)}")
 
 # ─── 5. TRAIN / TEST SPLIT ───────────────────────────────────────────────────
 X_train_gaze, X_test_gaze, y_train_gaze, y_test_gaze = train_test_split(
@@ -126,7 +126,12 @@ X_train_gaze, X_test_gaze, y_train_gaze, y_test_gaze = train_test_split(
 X_train_pose, X_test_pose, y_train_pose, y_test_pose = train_test_split(
     X2, y2, test_size=0.2, shuffle=True, random_state=42, stratify=y2)
 
+
+
+print(f"Pose  — class balance: {np.bincount(y_train_pose)}")
+
 # ─── 6. SCALE ────────────────────────────────────────────────────────────────
+sampler = RandomOverSampler(random_state=42)  # Handle class imbalance by oversampling minority class
 scaler1 = StandardScaler()
 X_train_gaze = scaler1.fit_transform(X_train_gaze)
 X_test_gaze  = scaler1.transform(X_test_gaze)
@@ -134,6 +139,10 @@ X_test_gaze  = scaler1.transform(X_test_gaze)
 scaler2 = StandardScaler()
 X_train_pose = scaler2.fit_transform(X_train_pose)
 X_test_pose  = scaler2.transform(X_test_pose)
+X_train_pose, y_train_pose = sampler.fit_resample(X_train_pose, y_train_pose)
+
+
+print(f"Pose  — class balance: {np.bincount(y_train_pose)}")
 
 # ─── 7. CLASS WEIGHTS (handles imbalanced data) ──────────────────────────────
 def get_class_weights(y):
@@ -142,9 +151,7 @@ def get_class_weights(y):
     return dict(zip(classes, weights))
 
 cw_gaze = get_class_weights(y_train_gaze)
-cw_pose = get_class_weights(y_train_pose)
 print(f"\nGaze class weights: {cw_gaze}")
-print(f"Pose  class weights: {cw_pose}")
 
 # ─── 8. CALLBACKS ────────────────────────────────────────────────────────────
 def make_callbacks(model_name):
@@ -267,7 +274,6 @@ history2 = my_model2.fit(
     validation_split=0.2,
     epochs=10,
     batch_size=32,
-    class_weight=cw_pose,
     callbacks=make_callbacks('pose_model'),
     verbose=1
 )
