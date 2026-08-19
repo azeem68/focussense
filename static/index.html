@@ -1,653 +1,404 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FocusSense — Attention Detection</title>
-  <style>
-    /* ── Reset & base ────────────────────────────────────────────── */
-    * { margin:0; padding:0; box-sizing:border-box; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FocusSense — AI Attention Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#020b06;--panel:#07170d;--panel2:#0a1d10;--line:#125b35;
+  --line2:#0d3d25;--green:#24e875;--green2:#0fae50;--text:#7fcf9b;
+  --muted:#397151;--red:#ff5e5e;--yellow:#ffc52f;--shadow:0 0 18px rgba(25,190,91,.05)
+}
+body{
+  min-height:100vh;background:var(--bg);color:var(--text);
+  font-family:"Courier New",Consolas,monospace;overflow-x:auto;
+}
+body:before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.045;
+  background:repeating-linear-gradient(0deg,transparent 0 2px,#75ff9d 2px 3px);
+}
+.app{min-width:1180px;padding:20px 22px 10px}
+.topbar{
+  height:76px;border-bottom:1px solid var(--line2);display:flex;align-items:center;
+  gap:14px;margin-bottom:18px
+}
+.logo{
+  width:56px;height:50px;border-radius:11px;background:#09a84b;
+  display:grid;place-items:center;color:#02160a;font-size:28px;font-weight:bold;
+  box-shadow:0 0 25px rgba(20,220,100,.18)
+}
+.brand h1{font-family:Georgia,serif;font-size:25px;color:#d7ffe2;letter-spacing:-.5px}
+.brand p{font-size:10px;color:#3e9a63;letter-spacing:2px;margin-top:6px}
+.top-meta{flex:1;font-size:10px;color:#347c50;letter-spacing:2px;margin-left:16px}
+.clock{font-size:16px;color:#b6efc8;letter-spacing:2px}
+.system{border:1px solid #116238;border-radius:9px;padding:10px 15px;color:#a8dfb8;font-size:11px;letter-spacing:1px}
 
-    body {
-      background:#0a0a0f;
-      color:#e2e8f0;
-      font-family:'Segoe UI',system-ui,sans-serif;
-      min-height:100vh;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      padding:2rem 1rem 3rem;
-    }
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px}
+.metric,.panel{
+  background:linear-gradient(145deg,#091d10,#06150b);border:1px solid var(--line2);
+  border-radius:9px;box-shadow:var(--shadow)
+}
+.metric{padding:14px 16px;height:68px}
+.metric label{display:block;color:#347b50;font-size:9px;letter-spacing:2px;margin-bottom:6px}
+.metric strong{font-size:21px;color:var(--green);letter-spacing:.5px}
+.metric strong.warn{color:var(--red)} .metric strong.yellow{color:var(--yellow)}
 
-    /* ── Header ──────────────────────────────────────────────────── */
-    .header { text-align:center; margin-bottom:2rem; }
+.dashboard{
+  display:grid;grid-template-columns:425px minmax(480px,1fr) 540px;gap:14px;
+  align-items:start
+}
+.col{display:flex;flex-direction:column;gap:14px}
+.panel{overflow:hidden}
+.panel-title{
+  height:45px;border-bottom:1px solid var(--line);display:flex;align-items:center;
+  padding:0 16px;color:#5fc98a;font-size:12px;font-weight:bold;letter-spacing:2px
+}
+.panel-title .eye{font-size:17px;margin-right:12px}
+.panel-body{padding:14px}
+.camera{height:220px;background:#020703;position:relative}
+.camera video{display:none}
+#output-canvas{width:100%;height:100%;object-fit:contain;background:#010502;display:block}
+.cam-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#225438;gap:8px}
+.cam-placeholder svg{width:42px;height:42px}
+.badge{position:absolute;top:10px;left:10px;padding:5px 11px;border:1px solid #246e42;background:#06150b;border-radius:5px;font-size:10px}
+.fps{position:absolute;right:10px;bottom:8px;font-size:9px;color:#3e8157}
 
-    h1 {
-      font-size:2.2rem;
-      font-weight:700;
-      background:linear-gradient(135deg,#6366f1,#8b5cf6);
-      -webkit-background-clip:text;
-      background-clip:text;
-      -webkit-text-fill-color:transparent;
-      color:transparent;
-      margin-bottom:0.3rem;
-    }
+.status{height:215px;text-align:center}
+.status-word{font-size:28px;font-weight:bold;letter-spacing:3px;color:var(--green);margin:12px 0 15px}
+.status-word.dis{color:var(--red)}
+.conf-label{text-align:left;font-size:9px;letter-spacing:2px;color:#3b8154}
+.confbar{height:7px;background:#102719;border-radius:5px;margin:7px 0 13px;overflow:hidden}
+.confbar i{display:block;height:100%;width:0;background:var(--green);transition:width .25s}
+.status-row{display:grid;grid-template-columns:60px 1fr 70px;gap:8px;align-items:center;margin:8px 0;font-size:10px}
+.status-row span:first-child{text-align:left;color:#4d9868}
+.status-row span:last-child{text-align:right;color:#4c9364}
+.mini{height:5px;background:#122a1b;border-radius:5px;overflow:hidden}.mini i{display:block;height:100%;width:0;background:var(--green)}
 
-    .subtitle { color:#475569; font-size:0.88rem; letter-spacing:0.03em; }
+.warning{min-height:205px}
+.warning-main{display:flex;align-items:baseline;gap:10px;margin:13px 0}
+.warning-main strong{font-size:27px;color:var(--yellow)}
+.warning-main span{font-size:10px;color:#a58b35}
+.warning-sub{font-size:10px;color:#3e8357;margin-bottom:7px}
+.warning-progress{height:8px;background:#122a1b;border-radius:5px;overflow:hidden}
+.warning-progress i{height:100%;width:0;display:block;background:linear-gradient(90deg,#ffc52f,#ff6b4d);transition:width .5s}
+.warning-note{font-size:9px;line-height:1.6;color:#3d8056;margin-top:10px}
+.warning-total{border:1px solid #17613a;padding:7px;text-align:center;margin-top:9px;font-size:10px;color:#4e9c68}
 
-    /* ── Main grid ───────────────────────────────────────────────── */
-    .main-grid {
-      display:grid;
-      grid-template-columns:1fr 300px;
-      gap:1.25rem;
-      width:100%;
-      max-width:1080px;
-    }
+.gaze-panel{min-height:355px}
+.gaze-area{height:185px;margin:7px 12px 12px;border:2px solid #12603a;border-radius:7px;position:relative;
+  background:
+  linear-gradient(90deg,transparent 32.9%,#135d39 33%,transparent 33.2%,transparent 66.2%,#135d39 66.4%,transparent 66.6%),
+  linear-gradient(0deg,transparent 32.9%,#135d39 33%,transparent 33.2%,transparent 66.2%,#135d39 66.4%,transparent 66.6%),
+  #092114
+}
+.gaze-point{position:absolute;width:18px;height:18px;border:2px solid var(--green);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(30,240,120,.6);transition:left .25s,top .25s}
+.gaze-point:after{content:"";position:absolute;width:2px;height:30px;background:currentColor;left:6px;top:-8px;opacity:.65}
+.gaze-point:before{content:"";position:absolute;width:30px;height:2px;background:currentColor;left:-8px;top:6px;opacity:.65}
+.gaze-label-top{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:8px;color:#55bd7b}
+.gaze-coords{position:absolute;bottom:5px;left:0;right:0;text-align:center;font-size:8px;color:#296d46}
+.gaze-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 12px 12px}
+.data-box{border:1px solid #123e29;border-radius:7px;padding:11px}
+.data-box label{display:block;color:#357b51;font-size:8px;letter-spacing:1.5px;margin-bottom:5px}
+.data-box strong{font-size:15px;color:var(--green)}
+.data-box strong.red{color:var(--red)}
 
-    /* ── Video panel ─────────────────────────────────────────────── */
-    .video-panel {
-      background:#0d0d14;
-      border:1px solid #1a1a2e;
-      border-radius:16px;
-      overflow:hidden;
-      position:relative;
-      min-height:360px;
-      transition:box-shadow 0.3s;
-    }
+.log{height:340px}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tab{padding:10px 14px;border-right:1px solid var(--line);font-size:10px;color:#5eae7a}
+.tab.active{color:#a8eabf;background:#0b2414}
+.logbox{height:290px;padding:16px;overflow:auto;font-size:10px;line-height:1.7;color:#49a56a;white-space:pre-wrap}
+.logbox .yellow{color:#d0ad31}.logbox .red{color:#ff6969}
 
-    .video-panel.distract-border {
-      box-shadow:0 0 0 3px rgba(239,68,68,0.6);
-    }
+.distance{height:370px}
+.gauge{height:205px;display:grid;place-items:center;position:relative}
+.gauge svg{width:190px;height:190px}
+.gauge-number{position:absolute;text-align:center;top:88px;left:0;right:0;font-size:22px;color:#d0f6db;font-weight:bold}
+.gauge-unit{position:absolute;top:117px;left:0;right:0;text-align:center;font-size:9px;color:#3f8056}
+.tooclose{font-size:9px;letter-spacing:2px;text-align:center;color:#527f5f;margin-top:-5px}
+.range{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}
+.range .data-box{text-align:center}
 
-    #output-canvas { width:100%; display:block; border-radius:16px; }
-    #webcam        { display:none; }
-    #cap-canvas    { display:none; }
+.pose{height:370px}
+.radar{height:205px;display:grid;place-items:center}
+.radar svg{width:190px;height:190px}
+.pose-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 14px}
 
-    .video-overlay { position:absolute; top:14px; left:14px; }
+.buttons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+button{font-family:inherit;cursor:pointer;height:40px;border-radius:8px;font-weight:bold;letter-spacing:1px}
+.start{background:#0b7e3d;color:#d4ffe1;border:1px solid #1ed66e}
+.export{background:#071b0e;color:#6fba89;border:1px solid #175b36}
+.stop{background:#210b0b;color:#ff8076;border:1px solid #853c35}
+button:hover{filter:brightness(1.18)}button:disabled{opacity:.45;cursor:not-allowed}
 
-    .status-badge {
-      padding:5px 14px;
-      border-radius:99px;
-      font-size:13px;
-      font-weight:600;
-      letter-spacing:0.04em;
-      transition:all 0.3s;
-    }
+.footer{font-size:9px;color:#245a3b;display:flex;justify-content:space-between;margin-top:14px;padding:0 2px}
+#red-flash{position:fixed;inset:0;z-index:99;display:none;border:5px solid var(--red);background:rgba(255,40,40,.15);pointer-events:none;animation:flash .45s infinite alternate}
+@keyframes flash{to{background:rgba(255,40,40,.32)}}
+#warn-popup{position:fixed;right:22px;top:22px;z-index:100;background:#08160c;border:1px solid var(--red);border-radius:8px;padding:14px 18px;min-width:290px;transform:translateX(340px);transition:.35s;box-shadow:0 0 25px rgba(255,60,60,.2)}
+#warn-popup.show{transform:translateX(0)}#warn-popup b{color:var(--red);font-size:12px}#warn-popup p{font-size:10px;color:#72967e;margin-top:7px}
 
-    .badge-focused    { background:rgba(34,197,94,.15);  color:#22c55e; border:1px solid rgba(34,197,94,.35); }
-    .badge-distracted { background:rgba(239,68,68,.15);  color:#ef4444; border:1px solid rgba(239,68,68,.35); }
-    .badge-waiting    { background:rgba(100,116,139,.15); color:#64748b; border:1px solid rgba(100,116,139,.3); }
-
-    .fps-badge {
-      position:absolute; bottom:12px; right:14px;
-      font-size:11px; color:#334155;
-      background:rgba(0,0,0,0.55);
-      padding:3px 9px; border-radius:99px;
-    }
-
-    .cam-placeholder {
-      position:absolute; inset:0;
-      display:flex; flex-direction:column;
-      align-items:center; justify-content:center;
-      gap:0.5rem; color:#1e293b;
-    }
-
-    .cam-placeholder svg { width:48px; height:48px; }
-    .cam-placeholder p   { font-size:13px; }
-
-    /* ── Right panel ─────────────────────────────────────────────── */
-    .right-panel { display:flex; flex-direction:column; gap:1rem; }
-
-    .card {
-      background:#0d0d14;
-      border:1px solid #1a1a2e;
-      border-radius:14px;
-      padding:1rem 1.1rem;
-    }
-
-    .card-title {
-      font-size:10px; font-weight:600; color:#334155;
-      text-transform:uppercase; letter-spacing:0.09em;
-      margin-bottom:0.85rem;
-    }
-
-    /* controls */
-    .btn-row { display:flex; gap:0.6rem; }
-
-    .btn {
-      flex:1; padding:9px 0; border:none;
-      border-radius:10px; font-size:13px;
-      font-weight:500; cursor:pointer; transition:all 0.18s;
-    }
-
-    .btn-start {
-      background:linear-gradient(135deg,#6366f1,#8b5cf6);
-      color:#fff;
-    }
-
-    .btn-start:hover    { opacity:0.88; transform:translateY(-1px); }
-    .btn-start:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
-    .btn-stop  { background:#161622; color:#64748b; border:1px solid #1e1e30; }
-    .btn-stop:hover { background:#1e1e30; color:#94a3b8; }
-
-    /* connection */
-    .conn-row {
-      display:flex; align-items:center; gap:7px;
-      margin-top:0.7rem; font-size:12px; color:#334155;
-    }
-
-    .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
-    .dot-on   { background:#22c55e; }
-    .dot-off  { background:#ef4444; }
-    .dot-wait { background:#f59e0b; animation:blink 1s infinite; }
-
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
-
-    /* focus timer */
-    .timer-card {
-      background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08));
-      border:1px solid rgba(99,102,241,.18);
-      border-radius:14px; padding:1rem 1.1rem; text-align:center;
-    }
-
-    .timer-label {
-      font-size:10px; font-weight:600; color:#6366f1;
-      text-transform:uppercase; letter-spacing:0.09em; margin-bottom:0.3rem;
-    }
-
-    .timer-value {
-      font-size:2.6rem; font-weight:700; color:#818cf8;
-      font-variant-numeric:tabular-nums; letter-spacing:-0.02em;
-    }
-
-    /* model stats */
-    .stat-row {
-      display:flex; align-items:center;
-      justify-content:space-between; margin-bottom:0.55rem;
-    }
-
-    .stat-row:last-child { margin-bottom:0; }
-    .stat-name { font-size:12px; color:#475569; }
-    .stat-val  { font-size:12px; font-weight:500; color:#cbd5e1; }
-
-    .bar-wrap { width:64px; height:5px; background:#1a1a2e; border-radius:99px; overflow:hidden; }
-    .bar-fill {
-      height:100%; border-radius:99px;
-      background:linear-gradient(90deg,#6366f1,#8b5cf6);
-      transition:width 0.3s; width:0%;
-    }
-
-    /* environment */
-    .env-row {
-      display:flex; justify-content:space-between;
-      font-size:12px; margin-bottom:0.45rem; color:#475569;
-    }
-
-    .env-row:last-child { margin-bottom:0; }
-    .env-row span:last-child { color:#cbd5e1; font-weight:500; }
-
-    /* ── Warning countdown bar ───────────────────────────────────── */
-    .warn-card {
-      background:#0d0d14;
-      border:1px solid #1a1a2e;
-      border-radius:14px;
-      padding:1rem 1.1rem;
-      transition:border-color 0.3s;
-    }
-
-    .warn-card.active { border-color:rgba(239,68,68,0.4); }
-
-    .warn-header {
-      display:flex; justify-content:space-between;
-      align-items:center; margin-bottom:0.6rem;
-    }
-
-    .warn-title {
-      font-size:10px; font-weight:600; color:#334155;
-      text-transform:uppercase; letter-spacing:0.09em;
-    }
-
-    .warn-count {
-      font-size:11px; font-weight:600;
-      color:#ef4444; background:rgba(239,68,68,0.1);
-      padding:2px 8px; border-radius:99px;
-      border:1px solid rgba(239,68,68,0.2);
-    }
-
-    .warn-progress-wrap {
-      height:6px; background:#1a1a2e;
-      border-radius:99px; overflow:hidden; margin-bottom:0.5rem;
-    }
-
-    .warn-progress-bar {
-      height:100%; width:0%;
-      border-radius:99px;
-      background:linear-gradient(90deg,#f59e0b,#ef4444);
-      transition:width 0.9s linear;
-    }
-
-    .warn-status {
-      font-size:11px; color:#475569;
-    }
-
-    /* ── Full screen red flash overlay ──────────────────────────── */
-    #red-flash {
-      position:fixed; inset:0; z-index:9999;
-      background:rgba(239,68,68,0.18);
-      border:4px solid #ef4444;
-      display:none;
-      pointer-events:none;
-      animation:flash-pulse 0.5s ease-in-out infinite alternate;
-    }
-
-    @keyframes flash-pulse {
-      from { background:rgba(239,68,68,0.1); }
-      to   { background:rgba(239,68,68,0.3); }
-    }
-
-    /* ── Warning popup card (slide in from top-right) ────────────── */
-    #warn-popup {
-      position:fixed; top:20px; right:20px; z-index:10000;
-      background:#0d0d14;
-      border:1.5px solid #ef4444;
-      border-radius:14px;
-      padding:1rem 1.25rem;
-      min-width:260px;
-      box-shadow:0 8px 32px rgba(239,68,68,0.25);
-      transform:translateX(320px);
-      transition:transform 0.35s cubic-bezier(.22,.68,0,1.2);
-      pointer-events:none;
-    }
-
-    #warn-popup.show { transform:translateX(0); }
-
-    .popup-header {
-      display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;
-    }
-
-    .popup-icon { font-size:20px; }
-
-    .popup-title {
-      font-size:13px; font-weight:700;
-      color:#ef4444; letter-spacing:0.03em;
-    }
-
-    .popup-sub  { font-size:11px; color:#64748b; margin-bottom:0.4rem; }
-    .popup-msg  { font-size:12px; color:#94a3b8; line-height:1.5; }
-
-    /* ── Responsive ──────────────────────────────────────────────── */
-    @media (max-width:700px) {
-      .main-grid { grid-template-columns:1fr; }
-    }
-  </style>
+@media(max-width:1400px){
+  .dashboard{grid-template-columns:390px minmax(450px,1fr) 470px}
+}
+</style>
 </head>
 <body>
-
-<!-- Full screen red flash -->
 <div id="red-flash"></div>
+<div id="warn-popup"><b>⚠ DISTRACTION WARNING</b><p id="popup-sub">Warning #1 · 15s continuous distraction</p><p>Close distracting apps and refocus.</p></div>
 
-<!-- Warning popup -->
-<div id="warn-popup">
-  <div class="popup-header">
-    <span class="popup-icon">⚠️</span>
-    <span class="popup-title">DISTRACTION WARNING</span>
+<div class="app">
+<header class="topbar">
+  <div class="logo">◎</div>
+  <div class="brand"><h1>FocusSense</h1><p>AI ATTENTION TRACKER &nbsp; v3.0</p></div>
+  <div class="top-meta">△ WARN EVERY 15s &nbsp; · &nbsp; EYE GAZE TRACKING &nbsp; · &nbsp; Powered by main.py + Test_1.py</div>
+  <div class="clock" id="clock">00:00:00</div>
+  <div class="system">● &nbsp; SYSTEM ONLINE</div>
+</header>
+
+<section class="metrics">
+  <div class="metric"><label>FOCUS RATE</label><strong id="focus-rate">0%</strong></div>
+  <div class="metric"><label>DISTRACT EVENTS</label><strong id="events">0</strong></div>
+  <div class="metric"><label>WARNINGS FIRED</label><strong id="warnings">0</strong></div>
+  <div class="metric"><label>GAZE ZONE</label><strong id="zone" class="warn">—</strong></div>
+  <div class="metric"><label>SESSION TIME</label><strong id="session-time">00:00</strong></div>
+</section>
+
+<main class="dashboard">
+  <!-- LEFT -->
+  <div class="col">
+    <section class="panel">
+      <div class="panel-title">CAMERA FEED</div>
+      <div class="panel-body camera">
+        <div class="cam-placeholder" id="placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          <span>Click Start to begin</span>
+        </div>
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output-canvas"></canvas>
+        <canvas id="cap-canvas" style="display:none"></canvas>
+        <span class="badge" id="status-badge">● WAITING</span>
+        <span class="fps" id="fps-badge">— fps</span>
+      </div>
+    </section>
+
+    <section class="panel status">
+      <div class="panel-title">LIVE STATUS</div>
+      <div class="panel-body">
+        <div class="status-word" id="status-word">FOCUSED</div>
+        <div class="conf-label">CONFIDENCE</div><div class="confbar"><i id="status-conf"></i></div>
+        <div class="status-row"><span>GAZE</span><div class="mini"><i id="gaze-status-bar"></i></div><span id="gaze-status">—</span></div>
+        <div class="status-row"><span>POSE</span><div class="mini"><i id="pose-status-bar"></i></div><span id="pose-status">—</span></div>
+        <div class="status-row"><span>FACE</span><div class="mini"><i id="face-status-bar"></i></div><span id="face-status">—</span></div>
+      </div>
+    </section>
+
+    <section class="panel warning">
+      <div class="panel-title">△ WARNING TIMER (FIRES @15S)</div>
+      <div class="panel-body">
+        <div class="warning-main"><strong id="warn-seconds">0 s</strong><span id="warn-copy">FOCUSED — timer paused</span></div>
+        <div class="warning-sub">PROGRESS TO NEXT WARNING</div>
+        <div class="warning-progress"><i id="warn-bar"></i></div>
+        <div class="warning-note">Warning fires every 15s of continuous distraction.<br>Resets the instant focus is restored.</div>
+        <div class="warning-total">Total warnings this session: <span id="warning-total">0</span></div>
+      </div>
+    </section>
+
+    <div class="buttons">
+      <button class="start" id="start-btn" onclick="startSession()">▶ START</button>
+      <button class="export" onclick="exportLog()">↓ EXPORT</button>
+      <button class="stop" id="stop-btn" onclick="stopSession()">■ STOP</button>
+    </div>
   </div>
-  <div class="popup-sub" id="popup-sub">Warning #1 · 15s continuous distraction</div>
-  <div class="popup-msg">Close distracting apps and refocus.</div>
-</div>
 
-<!-- Header -->
-<div class="header">
-  <h1>FocusSense</h1>
-  <p class="subtitle">Real-time attention detection · gaze &nbsp;·&nbsp; pose &nbsp;·&nbsp; emotion</p>
-</div>
+  <!-- CENTER -->
+  <div class="col">
+    <section class="panel gaze-panel">
+      <div class="panel-title"><span class="eye">◉</span> EYE GAZE POSITION</div>
+      <div class="gaze-area">
+        <div class="gaze-label-top" id="gaze-zone-top">—</div>
+        <div class="gaze-point" id="gaze-point" style="left:50%;top:50%"></div>
+        <div class="gaze-coords" id="gaze-coords">x:0.50 y:0.50</div>
+      </div>
+      <div class="gaze-stats">
+        <div class="data-box"><label>GAZE X</label><strong id="gaze-x">0.50</strong></div>
+        <div class="data-box"><label>GAZE Y</label><strong id="gaze-y">0.50</strong></div>
+        <div class="data-box"><label>ZONE</label><strong id="gaze-zone-box">—</strong></div>
+      </div>
+    </section>
 
-<!-- Main layout -->
-<div class="main-grid">
-
-  <!-- Video panel -->
-  <div class="video-panel" id="video-panel">
-    <div class="cam-placeholder" id="placeholder">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-        <path d="M23 7l-7 5 7 5V7z"/>
-        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-      </svg>
-      <p>Click Start to begin</p>
-    </div>
-    <video  id="webcam"        autoplay playsinline></video>
-    <canvas id="output-canvas"></canvas>
-    <canvas id="cap-canvas"   ></canvas>
-    <div class="video-overlay">
-      <span class="status-badge badge-waiting" id="status-badge">● Waiting</span>
-    </div>
-    <div class="fps-badge" id="fps-badge">— fps</div>
+    <section class="panel log">
+      <div class="tabs"><div class="tab active">EVENT LOG</div><div class="tab">△ WARNINGS</div><div class="tab">ARCHITECTURE</div></div>
+      <div class="logbox" id="logbox">[system] FocusSense dashboard ready.
+[system] Waiting for camera session...
+[system] WebSocket endpoint: /ws</div>
+    </section>
   </div>
 
-  <!-- Right panel -->
-  <div class="right-panel">
+  <!-- RIGHT -->
+  <div class="col">
+    <section class="panel distance">
+      <div class="panel-title">DISTANCE</div>
+      <div class="gauge">
+        <svg viewBox="0 0 200 200">
+          <path d="M45 145 A75 75 0 1 1 155 145" fill="none" stroke="#183b26" stroke-width="12" stroke-linecap="round"/>
+          <path id="gauge-arc" d="M45 145 A75 75 0 1 1 155 145" fill="none" stroke="#ffc52f" stroke-width="12" stroke-linecap="round" stroke-dasharray="0 500"/>
+        </svg>
+        <div class="gauge-number" id="dist-number">—</div><div class="gauge-unit">cm</div>
+      </div>
+      <div class="tooclose" id="distance-status">—</div>
+      <div class="range">
+        <div class="data-box"><label>MIN</label><strong id="dist-min">—</strong></div>
+        <div class="data-box"><label>MAX</label><strong id="dist-max">—</strong></div>
+      </div>
+    </section>
 
-    <!-- Controls -->
-    <div class="card">
-      <div class="card-title">Controls</div>
-      <div class="btn-row">
-        <button class="btn btn-start" id="start-btn" onclick="startSession()">▶ Start</button>
-        <button class="btn btn-stop"  id="stop-btn"  onclick="stopSession()">■ Stop</button>
+    <section class="panel pose">
+      <div class="panel-title">HEAD POSE</div>
+      <div class="radar">
+        <svg viewBox="0 0 200 200">
+          <g fill="none" stroke="#1a6841" stroke-width="1">
+            <circle cx="100" cy="100" r="68"/><circle cx="100" cy="100" r="45"/><circle cx="100" cy="100" r="22"/>
+            <path d="M100 25V175M25 100H175M47 47L153 153M153 47L47 153"/>
+          </g>
+          <polygon id="pose-poly" points="100,50 145,130 55,130" fill="rgba(25,220,110,.12)" stroke="#2adf7a" stroke-width="2"/>
+          <circle id="pose-dot" cx="100" cy="100" r="5" fill="#5cff9b"/>
+          <text x="100" y="20" text-anchor="middle" fill="#327d50" font-size="8">YAW</text>
+          <text x="182" y="104" text-anchor="end" fill="#327d50" font-size="8">PITCH</text>
+          <text x="35" y="104" fill="#327d50" font-size="8">ROLL</text>
+        </svg>
       </div>
-      <div class="conn-row">
-        <span class="dot dot-off" id="conn-dot"></span>
-        <span id="conn-text">Not connected</span>
+      <div class="pose-stats">
+        <div class="data-box"><label>YAW</label><strong id="yaw">—</strong></div>
+        <div class="data-box"><label>PITCH</label><strong id="pitch">—</strong></div>
+        <div class="data-box"><label>ROLL</label><strong id="roll">—</strong></div>
       </div>
-    </div>
-
-    <!-- Focus timer -->
-    <div class="timer-card">
-      <div class="timer-label">Focus Time</div>
-      <div class="timer-value" id="focus-timer">00:00</div>
-    </div>
-
-    <!-- Warning countdown -->
-    <div class="warn-card" id="warn-card">
-      <div class="warn-header">
-        <span class="warn-title">⚠ Warning Timer (fires @15s)</span>
-        <span class="warn-count" id="warn-count">0 warnings</span>
-      </div>
-      <div class="warn-progress-wrap">
-        <div class="warn-progress-bar" id="warn-bar"></div>
-      </div>
-      <div class="warn-status" id="warn-status">FOCUSED — timer paused</div>
-    </div>
-
-    <!-- Model signals -->
-    <div class="card">
-      <div class="card-title">Model Signals</div>
-      <div class="stat-row">
-        <span class="stat-name">Gaze</span>
-        <span class="stat-val" id="gaze-label">—</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-name">Confidence</span>
-        <div class="bar-wrap"><div class="bar-fill" id="gaze-bar"></div></div>
-      </div>
-      <div class="stat-row" style="margin-top:.6rem">
-        <span class="stat-name">Pose</span>
-        <span class="stat-val" id="pose-label">—</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-name">Confidence</span>
-        <div class="bar-wrap"><div class="bar-fill" id="pose-bar"></div></div>
-      </div>
-      <div class="stat-row" style="margin-top:.6rem">
-        <span class="stat-name">Emotion</span>
-        <span class="stat-val" id="df-label">—</span>
-      </div>
-    </div>
-
-    <!-- Environment -->
-    <div class="card">
-      <div class="card-title">Environment</div>
-      <div class="env-row"><span>Distance</span><span id="dist-val">— cm</span></div>
-      <div class="env-row"><span>Yaw</span>    <span id="yaw-val">—°</span></div>
-      <div class="env-row"><span>Pitch</span>  <span id="pitch-val">—°</span></div>
-      <div class="env-row"><span>Frames</span> <span id="frame-val">0</span></div>
-    </div>
-
+    </section>
   </div>
-</div>
+</main>
 
+<footer class="footer">
+  <span>FocusSense &nbsp;·&nbsp; Front_1.py → main.py (AttentionEngine) → Test_1.py (models)</span>
+  <span id="last-update">Last update: —</span>
+</footer>
+</div>
 
 <script>
-  // ── Constants ──────────────────────────────────────────────────────────────
-  const WARNING_INTERVAL_S = 15;   // matches main.py WARNING_INTERVAL_S
+const WARNING_INTERVAL_S=15;
+let ws=null,stream=null,running=false,focusSecs=0,distractSecs=0,warnCount=0;
+let focusTotal=0,frameTotal=0,distractionEvents=0,waitingReply=false,fpsCount=0;
+let timerHandle=null,fpsHandle=null,flashHandle=null,sessionStart=null;
+const webcam=document.getElementById("webcam"),outCanvas=document.getElementById("output-canvas");
+const capCanvas=document.getElementById("cap-canvas"),outCtx=outCanvas.getContext("2d"),capCtx=capCanvas.getContext("2d");
+const placeholder=document.getElementById("placeholder"),redFlash=document.getElementById("red-flash"),warnPopup=document.getElementById("warn-popup");
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  let ws           = null;
-  let stream       = null;
-  let running      = false;
-  let focusSecs    = 0;
-  let distractSecs = 0;
-  let warnCount    = 0;
-  let waitingReply = false;
-  let fpsCount     = 0;
+function text(id,v){document.getElementById(id).textContent=v}
+function pct(id,v){document.getElementById(id).style.width=Math.max(0,Math.min(100,(Number(v)||0)*100))+"%"}
+function addLog(msg,cls=""){
+  const box=document.getElementById("logbox"),t=new Date().toLocaleTimeString("en-GB");
+  const line=document.createElement("div"); line.className=cls;
+  line.textContent=`[${t}] ${msg}`; box.appendChild(line); box.scrollTop=box.scrollHeight;
+}
+function setConn(state){text("last-update",`Last update: ${new Date().toLocaleTimeString("en-GB")}`)}
 
-  let timerHandle  = null;
-  let fpsHandle    = null;
-  let flashHandle  = null;
+function connect(){
+  const proto=location.protocol==="https:"?"wss":"ws";
+  ws=new WebSocket(`${proto}://${location.host}/ws`);
+  addLog("Connecting to /ws ...");
+  ws.onopen=()=>{addLog("WebSocket connected");sendFrame()};
+  ws.onclose=()=>{addLog("WebSocket disconnected","red");waitingReply=false;if(running)setTimeout(connect,2000)};
+  ws.onerror=()=>{addLog("WebSocket connection error","red");waitingReply=false};
+  ws.onmessage=e=>{waitingReply=false;updateUI(JSON.parse(e.data));fpsCount++;if(running)requestAnimationFrame(sendFrame)}
+}
+function sendFrame(){
+  if(!running||waitingReply||!ws||ws.readyState!==1||!webcam.videoWidth)return;
+  capCanvas.width=webcam.videoWidth;capCanvas.height=webcam.videoHeight;
+  capCtx.drawImage(webcam,0,0);ws.send(capCanvas.toDataURL("image/jpeg",.8));waitingReply=true;
+}
+function updateUI(d){
+  const img=new Image();
+  img.onload=()=>{outCanvas.width=img.width;outCanvas.height=img.height;outCtx.drawImage(img,0,0)}
+  img.src=d.frame;
 
-  // ── DOM refs ───────────────────────────────────────────────────────────────
-  const webcam      = document.getElementById("webcam");
-  const outCanvas   = document.getElementById("output-canvas");
-  const capCanvas   = document.getElementById("cap-canvas");
-  const outCtx      = outCanvas.getContext("2d");
-  const capCtx      = capCanvas.getContext("2d");
-  const placeholder = document.getElementById("placeholder");
-  const redFlash    = document.getElementById("red-flash");
-  const warnPopup   = document.getElementById("warn-popup");
+  frameTotal++; text("last-update",`Last update: ${new Date().toLocaleTimeString("en-GB")}`);
+  const focused=!!d.focused;
+  const sw=document.getElementById("status-word");
+  sw.textContent=focused?"FOCUSED":"DISTRACTED";sw.className="status-word"+(focused?"":" dis");
+  text("status-badge",focused?"● FOCUSED":"● DISTRACTED");
+  text("gaze-status",d.gaze_label??"—");text("pose-status",d.pose_label??"—");text("face-status",d.df_label??"—");
+  pct("gaze-status-bar",d.gaze_conf);pct("pose-status-bar",d.pose_conf);
+  pct("face-status-bar",focused?1:0.55);pct("status-conf",Math.max(d.gaze_conf||0,d.pose_conf||0));
+  text("gaze-x",Number(d.gaze_x??0.5).toFixed(2));text("gaze-y",Number(d.gaze_y??0.5).toFixed(2));
+  const gx=Number(d.gaze_x??.5),gy=Number(d.gaze_y??.5);
+  document.getElementById("gaze-point").style.left=(Math.max(0,Math.min(1,gx))*100)+"%";
+  document.getElementById("gaze-point").style.top=(Math.max(0,Math.min(1,gy))*100)+"%";
+  const zone=d.gaze_zone||d.zone||"—"; text("zone",zone);text("gaze-zone-box",zone);text("gaze-zone-top",zone);text("gaze-coords",`x:${gx.toFixed(2)}  y:${gy.toFixed(2)}`);
 
-  // Request browser notification permission on load
-  if ("Notification" in window) Notification.requestPermission();
+  const dist=Number(d.dist);text("dist-number",Number.isFinite(dist)?dist:"—");text("distance-status",Number.isFinite(dist)&&dist<25?"TOO CLOSE":"DISTANCE OK");
+  text("dist-min",(d.dist_min??"9")+"cm");text("dist-max",(d.dist_max??"20")+"cm");
+  const arc=document.getElementById("gauge-arc");const len=330, value=Math.max(0,Math.min(1,(dist||0)/50));arc.style.strokeDasharray=`${len*value} ${len}`;
 
-  // ── WebSocket ──────────────────────────────────────────────────────────────
-  function connect() {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}/ws`);
+  const yaw=Number(d.yaw)||0,pitch=Number(d.pitch)||0,roll=Number(d.roll)||0;
+  text("yaw",yaw.toFixed(2));text("pitch",pitch.toFixed(2));text("roll",roll.toFixed(2));
+  const cx=100+Math.max(-1,Math.min(1,yaw/2))*60,cy=100-Math.max(-1,Math.min(1,pitch/2))*60;
+  document.getElementById("pose-dot").setAttribute("cx",cx);document.getElementById("pose-dot").setAttribute("cy",cy);
 
-    setConn("wait", "Connecting…");
-
-    ws.onopen = () => {
-      setConn("on", "Connected");
-      sendFrame();
-    };
-
-    ws.onclose = () => {
-      setConn("off", "Disconnected");
-      waitingReply = false;
-      if (running) setTimeout(connect, 2000);
-    };
-
-    ws.onerror = () => {
-      setConn("off", "Connection error");
-      waitingReply = false;
-    };
-
-    ws.onmessage = (evt) => {
-      waitingReply = false;
-      updateUI(JSON.parse(evt.data));
-      fpsCount++;
-      if (running) requestAnimationFrame(sendFrame);
-    };
+  if(!focused)distractionEvents=Math.max(distractionEvents,Math.floor(d.distraction_events||distractionEvents));
+  text("events",distractionEvents);
+  tickWarningEngine(focused);
+}
+function tickWarningEngine(focused){
+  if(focused){
+    distractSecs=0;text("warn-seconds","0 s");text("warn-copy","FOCUSED — timer paused");
+    document.getElementById("warn-bar").style.width="0%";
+    return;
   }
-
-  // ── Send frame ─────────────────────────────────────────────────────────────
-  function sendFrame() {
-    if (!running || waitingReply)    return;
-    if (!ws || ws.readyState !== 1)  return;
-    if (!webcam.videoWidth)          return;
-
-    capCanvas.width  = webcam.videoWidth;
-    capCanvas.height = webcam.videoHeight;
-    capCtx.drawImage(webcam, 0, 0);
-
-    ws.send(capCanvas.toDataURL("image/jpeg", 0.8));
-    waitingReply = true;
-  }
-
-  // ── Update UI ──────────────────────────────────────────────────────────────
-  function updateUI(d) {
-    // Draw annotated frame
-    const img  = new Image();
-    img.onload = () => {
-      outCanvas.width  = img.width;
-      outCanvas.height = img.height;
-      outCtx.drawImage(img, 0, 0);
-    };
-    img.src = d.frame;
-
-    // Status badge
-    const badge = document.getElementById("status-badge");
-    const panel = document.getElementById("video-panel");
-    if (d.focused) {
-      badge.className   = "status-badge badge-focused";
-      badge.textContent = "● Focused";
-      panel.classList.remove("distract-border");
-    } else {
-      badge.className   = "status-badge badge-distracted";
-      badge.textContent = "● Distracted";
-      panel.classList.add("distract-border");
-    }
-
-    // Model signals
-    setText("gaze-label", d.gaze_label);
-    setText("pose-label", d.pose_label);
-    setText("df-label",   d.df_label);
-    setBar ("gaze-bar",   d.gaze_conf);
-    setBar ("pose-bar",   d.pose_conf);
-
-    // Environment
-    setText("dist-val",  d.dist  + " cm");
-    setText("yaw-val",   d.yaw   + "°");
-    setText("pitch-val", d.pitch + "°");
-    setText("frame-val", d.frame_n);
-  }
-
-  // ── Distraction warning engine (JS equivalent of DistractionWarningEngine) ─
-  function tickWarningEngine(focused) {
-    const bar    = document.getElementById("warn-bar");
-    const status = document.getElementById("warn-status");
-    const card   = document.getElementById("warn-card");
-
-    if (focused) {
-      // Reset instantly on focus return — same as Front_1.py
-      distractSecs = 0;
-      bar.style.width = "0%";
-      status.textContent = "FOCUSED — timer paused";
-      card.classList.remove("active");
-    } else {
-      distractSecs++;
-      const pct = ((distractSecs % WARNING_INTERVAL_S) / WARNING_INTERVAL_S) * 100;
-      bar.style.width = pct + "%";
-      status.textContent = `Distracted ${distractSecs}s — warning in ${WARNING_INTERVAL_S - (distractSecs % WARNING_INTERVAL_S)}s`;
-      card.classList.add("active");
-
-      // Fire warning every WARNING_INTERVAL_S seconds
-      if (distractSecs > 0 && distractSecs % WARNING_INTERVAL_S === 0) {
-        fireWarning(distractSecs);
-      }
-    }
-  }
-
-  // ── Fire warning (equivalent of FullScreenRedFlash + WarningPopup) ─────────
-  function fireWarning(secs) {
-    warnCount++;
-    setText("warn-count", warnCount + (warnCount === 1 ? " warning" : " warnings"));
-
-    // 1. Full screen red flash
-    redFlash.style.display = "block";
-    clearTimeout(flashHandle);
-    flashHandle = setTimeout(() => {
-      redFlash.style.display = "none";
-    }, 2000);
-
-    // 2. Slide-in popup card
-    document.getElementById("popup-sub").textContent =
-      `Warning #${warnCount}  ·  ${secs}s continuous distraction`;
-    warnPopup.classList.add("show");
-    setTimeout(() => warnPopup.classList.remove("show"), 4000);
-
-    // 3. Browser notification (OS-level)
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("FocusSense — Distraction Warning ⚠️", {
-        body: `You've been distracted for ${secs} seconds. Refocus now!`,
-        icon: ""
-      });
-    }
-  }
-
-  // ── 1-second tick — drives focus timer + warning engine ───────────────────
-  function tick() {
-    const badge   = document.getElementById("status-badge");
-    const focused = badge.classList.contains("badge-focused");
-
-    // Focus timer
-    if (focused) {
-      focusSecs++;
-      const m = String(Math.floor(focusSecs/60)).padStart(2,"0");
-      const s = String(focusSecs % 60).padStart(2,"0");
-      setText("focus-timer", `${m}:${s}`);
-    }
-
-    // Warning engine
-    tickWarningEngine(focused);
-  }
-
-  // ── Start session ──────────────────────────────────────────────────────────
-  async function startSession() {
-    document.getElementById("start-btn").disabled = true;
-    placeholder.style.display = "none";
-
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video:{ width:640, height:480, facingMode:"user" }, audio:false
-      });
-      webcam.srcObject = stream;
-      await new Promise(r => webcam.onloadedmetadata = r);
-    } catch (err) {
-      alert("Camera access denied. Please allow camera permissions and refresh.");
-      document.getElementById("start-btn").disabled = false;
-      placeholder.style.display = "flex";
-      return;
-    }
-
-    running     = true;
-    focusSecs   = 0;
-    distractSecs = 0;
-    warnCount   = 0;
-
-    connect();
-
-    timerHandle = setInterval(tick, 1000);
-    fpsHandle   = setInterval(() => {
-      setText("fps-badge", fpsCount + " fps");
-      fpsCount = 0;
-    }, 1000);
-  }
-
-  // ── Stop session ───────────────────────────────────────────────────────────
-  function stopSession() {
-    running      = false;
-    waitingReply = false;
-
-    if (ws)     { ws.close(); ws = null; }
-    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-
-    clearInterval(timerHandle);
-    clearInterval(fpsHandle);
-    clearTimeout(flashHandle);
-
-    redFlash.style.display = "none";
-    warnPopup.classList.remove("show");
-
-    document.getElementById("start-btn").disabled = false;
-    document.getElementById("status-badge").className   = "status-badge badge-waiting";
-    document.getElementById("status-badge").textContent = "● Waiting";
-    document.getElementById("fps-badge").textContent    = "— fps";
-    document.getElementById("warn-bar").style.width     = "0%";
-    document.getElementById("warn-status").textContent  = "FOCUSED — timer paused";
-    document.getElementById("warn-card").classList.remove("active");
-    placeholder.style.display = "flex";
-
-    setConn("off", "Not connected");
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  function setText(id, val) { document.getElementById(id).textContent = val; }
-  function setBar (id, conf){ document.getElementById(id).style.width = (conf*100)+"%"; }
-
-  function setConn(state, text) {
-    const dot = document.getElementById("conn-dot");
-    dot.className = state==="on" ? "dot dot-on" : state==="wait" ? "dot dot-wait" : "dot dot-off";
-    setText("conn-text", text);
-  }
+  distractSecs++;
+  const rem=WARNING_INTERVAL_S-(distractSecs%WARNING_INTERVAL_S);
+  const p=(distractSecs%WARNING_INTERVAL_S)/WARNING_INTERVAL_S*100;
+  text("warn-seconds",`${distractSecs} s`);text("warn-copy",`DISTRACTED · ${distractSecs}s · next warning in ${rem}s`);
+  document.getElementById("warn-bar").style.width=p+"%";
+  if(distractSecs%WARNING_INTERVAL_S===0)fireWarning(distractSecs);
+}
+function fireWarning(secs){
+  warnCount++;text("warnings",warnCount);text("warning-total",warnCount);
+  redFlash.style.display="block";clearTimeout(flashHandle);flashHandle=setTimeout(()=>redFlash.style.display="none",2000);
+  text("popup-sub",`Warning #${warnCount} · ${secs}s continuous distraction`);warnPopup.classList.add("show");
+  setTimeout(()=>warnPopup.classList.remove("show"),4000);addLog(`DISTRACTED — warning #${warnCount} fired`,"red");
+  if("Notification"in window&&Notification.permission==="granted")new Notification("FocusSense — Distraction Warning",{body:`You've been distracted for ${secs} seconds. Refocus now!`});
+}
+function tick(){
+  if(!running)return;
+  const focused=document.getElementById("status-word").textContent==="FOCUSED";
+  if(focused){focusSecs++;focusTotal++;} else {distractionEvents=Math.max(distractionEvents,1)}
+  const total=focusTotal+Math.max(0,frameTotal/8);
+  text("focus-rate",total?Math.round(focusTotal/total*100)+"%":"0%");
+  const m=String(Math.floor(focusSecs/60)).padStart(2,"0"),s=String(focusSecs%60).padStart(2,"0");
+  text("session-time",`${m}:${s}`);tickWarningEngine(focused);
+}
+async function startSession(){
+  document.getElementById("start-btn").disabled=true;placeholder.style.display="none";
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:"user"},audio:false});
+    webcam.srcObject=stream;await new Promise(r=>webcam.onloadedmetadata=r);
+  }catch(err){alert("Camera access denied. Please allow camera permissions and refresh.");document.getElementById("start-btn").disabled=false;placeholder.style.display="flex";return}
+  running=true;focusSecs=0;focusTotal=0;distractSecs=0;warnCount=0;frameTotal=0;distractionEvents=0;sessionStart=Date.now();
+  text("events","0");text("warnings","0");text("warning-total","0");addLog("Camera started");connect();
+  timerHandle=setInterval(tick,1000);fpsHandle=setInterval(()=>{text("fps-badge",fpsCount+" fps");fpsCount=0},1000);
+  if("Notification"in window)Notification.requestPermission();
+}
+function stopSession(){
+  running=false;waitingReply=false;if(ws){ws.close();ws=null}if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  clearInterval(timerHandle);clearInterval(fpsHandle);clearTimeout(flashHandle);redFlash.style.display="none";warnPopup.classList.remove("show");
+  document.getElementById("start-btn").disabled=false;document.getElementById("status-word").textContent="FOCUSED";document.getElementById("status-word").className="status-word";
+  text("status-badge","● WAITING");text("fps-badge","— fps");placeholder.style.display="flex";addLog("Session stopped");
+}
+function exportLog(){
+  const blob=new Blob([document.getElementById("logbox").innerText],{type:"text/plain"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`FocusSense_log_${Date.now()}.txt`;a.click();URL.revokeObjectURL(a.href);
+}
+setInterval(()=>text("clock",new Date().toLocaleTimeString("en-GB")),1000);
+text("clock",new Date().toLocaleTimeString("en-GB"));
 </script>
-
 </body>
 </html>
